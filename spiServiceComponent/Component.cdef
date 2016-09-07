@@ -1,0 +1,26 @@
+provides:
+{
+    api:
+    {
+        $MANGOH_ROOT/apps/SpiBus/spi.api
+    }
+}
+
+sources:
+{
+    spiService.c
+}
+
+cflags:
+{
+    -std=c99
+    -I$MANGOH_ROOT/apps/SpiBus/spiLibraryComponent
+}
+
+requires:
+{
+    component:
+    {
+        spiLibraryComponent
+    }
+}

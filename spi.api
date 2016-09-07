@@ -1,0 +1,12 @@
+REFERENCE DeviceHandle;
+
+FUNCTION le_result_t Open
+(
+    string deviceName [128] IN,
+    DeviceHandle handle OUT
+);
+
+FUNCTION Close
+(
+    DeviceHandle handle IN
+);

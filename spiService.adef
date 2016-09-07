@@ -1,0 +1,23 @@
+version: 0.1.0
+sandboxed: true
+start: auto
+
+executables:
+{
+    spiService = (spiServiceComponent)
+}
+
+processes:
+{
+    run:
+    {
+        (spiService)
+    }
+
+    faultAction: restart
+}
+
+extern:
+{
+    spiService.spiServiceComponent.spi
+}

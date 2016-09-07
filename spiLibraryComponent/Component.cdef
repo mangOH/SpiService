@@ -1,0 +1,9 @@
+sources:
+{
+    spiLibrary.c
+}
+
+cflags:
+{
+    -std=c99
+}
