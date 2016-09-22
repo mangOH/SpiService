@@ -1,3 +1,26 @@
+DEFINE MAX_WRITE_SIZE = 1024;
+DEFINE MAX_READ_SIZE = 1024;
+
+DEFINE  SPI_CPHA        =        0x01;
+DEFINE  SPI_CPOL        =        0x02;
+DEFINE  SPI_MODE_0      =        0x00;
+DEFINE  SPI_MODE_1      =        0x01;
+DEFINE  SPI_MODE_2      =        0x02;
+DEFINE  SPI_MODE_3      =        0x03;
+DEFINE  SPI_LSB_FIRST   =        0x08;
+
+/* untested mode definitions below
+DEFINE  SPI_CS_HIGH             0x04
+DEFINE  SPI_3WIRE               0x10
+DEFINE  SPI_LOOP                0x20
+DEFINE  SPI_NO_CS               0x40
+DEFINE  SPI_READY               0x80
+DEFINE  SPI_TX_DUAL             0x100
+DEFINE  SPI_TX_QUAD             0x200
+DEFINE  SPI_RX_DUAL             0x400
+DEFINE  SPI_RX_QUAD             0x800
+*/
+
 REFERENCE DeviceHandle;
 
 FUNCTION le_result_t Open
@@ -10,3 +33,27 @@ FUNCTION Close
 (
     DeviceHandle handle IN
 );
+
+FUNCTION Configure
+(
+    DeviceHandle handle IN,
+    int  mode IN,
+    uint8 bits IN,
+    uint32 speed IN,
+    int MSB IN
+);
+
+FUNCTION le_result_t WriteRead
+(
+    DeviceHandle handle IN,
+    uint8 writeData [MAX_WRITE_SIZE] IN,
+    uint8 readData  [MAX_READ_SIZE] OUT
+);
+
+FUNCTION le_result_t Write
+(
+    DeviceHandle handle IN,
+    uint8 writeData [MAX_WRITE_SIZE] IN
+);
+
+

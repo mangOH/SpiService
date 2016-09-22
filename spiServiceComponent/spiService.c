@@ -94,7 +94,9 @@ le_result_t spi_Open(const char* deviceName, spi_DeviceHandleRef_t* handle)
     newHandle->inode = deviceFileStat.st_ino;
     newHandle->owningSession = spi_GetClientSessionRef();
     newHandle->link = LE_DLS_LINK_INIT;
+    LE_INFO("#######before newHandle=%p, owningSession=%p", newHandle, newHandle->owningSession);
     le_dls_Stack(&g.deviceHandles, &newHandle->link);
+    LE_INFO("#######after newHandle=%p, owningSession=%p", newHandle, newHandle->owningSession);
     *handle = newHandle;
 
 resultKnown:
@@ -128,8 +130,104 @@ void spi_Close(spi_DeviceHandleRef_t handle)
     free(handle);
 }
 
+
+// SPI Initialization
+void spi_Configure
+(
+    spi_DeviceHandleRef_t handle,
+    int  mode,
+    uint8_t bits,
+    uint32_t speed,
+    int msb
+)
+{
+    if(!isHandleOwnedByCaller(handle))
+    {
+        LE_KILL_CLIENT("Cannot assign handle to configure as it is not owned by the caller");
+    }
+    spi_DeviceHandle_t* foundHandle =
+        findDeviceHandleWithInode(handle->inode);
+    if (foundHandle == NULL)
+    {
+        LE_KILL_CLIENT("Could not find record of the provided handle");
+    }
+    else if (foundHandle != handle)
+    {
+        LE_KILL_CLIENT("The handle with the matching inode isn't part of the supplied handle by the configure call ");
+    }
+
+    spiLib_Configure(handle->fd, mode, bits, speed, msb);
+}
+
+
+
+
+
+// SPI Read for Full Duplex Communication
+le_result_t spi_WriteRead
+(
+    spi_DeviceHandleRef_t handle,
+    const uint8_t*  writeData, 
+    size_t writeDataLength,
+    uint8_t*  readData,
+    size_t* readDataLength
+)
+{
+    if(!isHandleOwnedByCaller(handle))
+    {
+        LE_KILL_CLIENT("Cannot assign handle to read as it is not owned by the caller");
+    }
+    spi_DeviceHandle_t* foundHandle =
+        findDeviceHandleWithInode(handle->inode);
+    if (foundHandle == NULL)
+    {
+        LE_KILL_CLIENT("Could not find record of the provided handle");
+    }
+    else if (foundHandle != handle)
+    {
+        LE_KILL_CLIENT("The handle with the matching inode isn't part of the supplied handle by the read call");
+    }
+
+    return spiLib_WriteRead(handle->fd, writeData, writeDataLength, readData, readDataLength);
+}
+
+
+
+
+
+
+// SPI Write for Half Duplex Communication
+le_result_t spi_Write
+(
+    spi_DeviceHandleRef_t handle,
+    const uint8_t* writeData,
+    size_t writeDataLength
+)
+{
+    if(!isHandleOwnedByCaller(handle))
+    {
+        LE_KILL_CLIENT("Cannot assign handle to write  as it is not owned by the caller");
+    }
+    spi_DeviceHandle_t* foundHandle =
+        findDeviceHandleWithInode(handle->inode);
+    if (foundHandle == NULL)
+    {
+        LE_KILL_CLIENT("Could not find record of the provided handle");
+    }
+    else if (foundHandle != handle)
+    {
+        LE_KILL_CLIENT("The handle with the matching inode isn't part of the supplied handle by the write call");
+    }
+
+    return spiLib_Write(handle->fd, writeData, writeDataLength);
+}
+
+
+
 static bool isHandleOwnedByCaller(const spi_DeviceHandle_t* handle)
 {
+    LE_INFO("handle->owningSession==%p, spi_GetClientSessionRef()==%p, again=%p", handle->owningSession, spi_GetClientSessionRef(), spi_GetClientSessionRef());
+    LE_INFO("handle==%p", handle);
     return handle->owningSession == spi_GetClientSessionRef();
 }
 
@@ -181,6 +279,8 @@ static void clientSessionClosedHandler(le_msg_SessionRef_t clientSession, void* 
 COMPONENT_INIT
 {
     LE_INFO("spiServiceComponent initializing");
+
+    g.deviceHandles = LE_DLS_LIST_INIT;
 
     // Register a handler to be notified when clients disconnect
     le_msg_AddServiceCloseHandler(spi_GetServiceRef(), clientSessionClosedHandler, NULL);
