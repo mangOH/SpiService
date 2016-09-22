@@ -17,6 +17,14 @@ processes:
     faultAction: restart
 }
 
+requires:
+{
+    device:
+    {
+        [rw] /dev/sierra_spi /dev/
+    }
+}
+
 extern:
 {
     spiService.spiServiceComponent.spi

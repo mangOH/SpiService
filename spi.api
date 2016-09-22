@@ -1,13 +1,13 @@
 DEFINE MAX_WRITE_SIZE = 1024;
-DEFINE MAX_READ_SIZE = 1024;
+DEFINE MAX_READ_SIZE  = 1024;
 
-DEFINE  SPI_CPHA        =        0x01;
-DEFINE  SPI_CPOL        =        0x02;
-DEFINE  SPI_MODE_0      =        0x00;
-DEFINE  SPI_MODE_1      =        0x01;
-DEFINE  SPI_MODE_2      =        0x02;
-DEFINE  SPI_MODE_3      =        0x03;
-DEFINE  SPI_LSB_FIRST   =        0x08;
+DEFINE SPI_CPHA       = 0x01;
+DEFINE SPI_CPOL       = 0x02;
+DEFINE SPI_MODE_0     = 0x00;
+DEFINE SPI_MODE_1     = 0x01;
+DEFINE SPI_MODE_2     = 0x02;
+DEFINE SPI_MODE_3     = 0x03;
+DEFINE SPI_LSB_FIRST  = 0x08;
 
 /* untested mode definitions below
 DEFINE  SPI_CS_HIGH             0x04
@@ -40,7 +40,7 @@ FUNCTION Configure
     int  mode IN,
     uint8 bits IN,
     uint32 speed IN,
-    int MSB IN
+    int msb IN
 );
 
 FUNCTION le_result_t WriteRead
