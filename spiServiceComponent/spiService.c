@@ -198,13 +198,13 @@ void spi_Configure
 
 //--------------------------------------------------------------------------------------------------
 /**
- * SPI Read for full duplex communication
+ * SPI Half Duplex Write followed by Half Duplex Read
  *
  * @return
  *      LE_OK on success or LE_FAULT on failure.
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t spi_WriteRead
+le_result_t spi_WriteRead_Hd
 (
     spi_DeviceHandleRef_t handle, ///< Handle for the SPI master to perform the write-read on
     const uint8_t* writeData,     ///< Tx command/address being sent to slave
@@ -229,7 +229,7 @@ le_result_t spi_WriteRead
             "call");
     }
 
-    return spiLib_WriteRead(
+    return spiLib_WriteRead_Hd(
         handle->fd,
         writeData,
         writeDataLength,
@@ -246,7 +246,7 @@ le_result_t spi_WriteRead
  *      LE_OK on success or LE_FAULT on failure.
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t spi_Write
+le_result_t spi_Write_Hd
 (
     spi_DeviceHandleRef_t handle, ///< Handle for the SPI master to perform the write on
     const uint8_t* writeData,     ///< Command/address being sent to slave
@@ -269,8 +269,90 @@ le_result_t spi_Write
             "call");
     }
 
-    return spiLib_Write(handle->fd, writeData, writeDataLength) == LE_OK ? LE_OK : LE_FAULT;
+    return spiLib_Write_Hd(handle->fd, writeData, writeDataLength) == LE_OK ? LE_OK : LE_FAULT;
 }
+
+
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Simultaneous SPI Write and  Read for full duplex communication
+ *
+ * @return
+ *      LE_OK on success or LE_FAULT on failure.
+ */
+//--------------------------------------------------------------------------------------------------
+le_result_t spi_WriteRead_Fd
+(
+    spi_DeviceHandleRef_t handle, ///< Handle for the SPI master to perform the write-read on
+    const uint8_t* writeData,     ///< Tx command/address being sent to slave
+    size_t writeDataLength,       ///< Number of bytes in tx message
+    uint8_t* readData,            ///< Rx response from slave
+    size_t *readDataLength        ///< Number of bytes in rx message 
+)
+{
+    if (!isHandleOwnedByCaller(handle))
+    {
+        LE_KILL_CLIENT("Cannot assign handle to read as it is not owned by the caller");
+    }
+    spi_DeviceHandle_t* foundHandle = findDeviceHandleWithInode(handle->inode);
+    if (foundHandle == NULL)
+    {
+        LE_KILL_CLIENT("Could not find record of the provided handle");
+    }
+    else if (foundHandle != handle)
+    {
+        LE_KILL_CLIENT(
+            "The handle with the matching inode isn't part of the supplied handle by the read "
+            "call");
+    }
+
+    if( *readDataLength < writeDataLength)
+    { 
+        LE_KILL_CLIENT("readData length cannot be less than writeData length");
+    }
+
+    return spiLib_WriteRead_Fd(
+        handle->fd,
+        writeData,
+        readData,
+        writeDataLength) == LE_OK ? LE_OK : LE_FAULT;
+}
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * SPI Read for Half Duplex Communication
+ *
+ * @return
+ *      LE_OK on success or LE_FAULT on failure.
+ */
+//--------------------------------------------------------------------------------------------------
+le_result_t spi_Read_Hd
+(
+    spi_DeviceHandleRef_t handle, ///< Handle for the SPI master to perform the write on
+    uint8_t* readData,      ///< Command/address being sent to slave
+    size_t* readDataLength        ///< Number of bytes in tx message
+)
+{
+    if (!isHandleOwnedByCaller(handle))
+    {
+        LE_KILL_CLIENT("Cannot assign handle to write  as it is not owned by the caller");
+    }
+    spi_DeviceHandle_t* foundHandle = findDeviceHandleWithInode(handle->inode);
+    if (foundHandle == NULL)
+    {
+        LE_KILL_CLIENT("Could not find record of the provided handle");
+    }
+    else if (foundHandle != handle)
+    {
+        LE_KILL_CLIENT(
+            "The handle with the matching inode isn't part of the supplied handle by the write "
+            "call");
+    }
+
+    return spiLib_Read_Hd(handle->fd, readData, readDataLength) == LE_OK ? LE_OK : LE_FAULT;
+}
+
 
 //--------------------------------------------------------------------------------------------------
 /**

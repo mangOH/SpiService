@@ -3,6 +3,10 @@
 #include <sys/ioctl.h>
 #include <linux/types.h>
 #include <linux/spi/spidev.h>
+#ifdef SPI_IOC_MAGIC
+#undef SPI_IOC_MAGIC
+#define SPI_IOC_MAGIC 'l'
+#endif
 
 
 //--------------------------------------------------------------------------------------------------
@@ -12,16 +16,16 @@
 //--------------------------------------------------------------------------------------------------
 void spiLib_Configure
 (
-    int fd,         ///<
+    int fd,         ///< name of device file. dont pass */dev* prefix
     int mode,       ///< Mode options for the bus as defined in spidev.h.  TODO: Perhaps we should
                     ///  consider redefining the mode options in spiLibrary.h because we should be
                     ///  abstracting away the underlying spidev.h
-    uint8_t bits,   ///<
-    uint32_t speed, ///<
-    int msb         ///<
+    uint8_t bits,   ///< bits per word
+    uint32_t speed, ///< max speed (Hz) 
+    int msb         ///< set as 0 for MSB as first byte or 1 for LSB as first byte
 )
 {
-    LE_INFO("Running the configure library call");
+    LE_DEBUG("Running the configure library call");
 
     int ret;
 
@@ -79,14 +83,14 @@ void spiLib_Configure
 
 
 /**-----------------------------------------------------------------------------------------------
- * Performs SPI WriteRead . You can send send Read command/ address of data to read.
- *
+ * Performs SPI WriteRead Half Duplex. You can send send Read command/ address of data to read.
+ * Note some devices do not support this mode. Check the data sheet of the device 
  * @return
  *      - LE_OK
  *      - LE_FAULT
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t spiLib_WriteRead
+le_result_t spiLib_WriteRead_Hd
 (
     int fd,                   ///< open file descriptor of SPI port
     const uint8_t* writeData, ///< tx command/address being sent to slave
@@ -116,34 +120,31 @@ le_result_t spiLib_WriteRead
         }
     };
 
-    if (true)
+    LE_DEBUG("Transmitting this message...len:%zu", writeDataLength);
+
+    for (size_t i = 0; i < writeDataLength; i++)
     {
-        LE_DEBUG("Transmitting this message...len:%zu", writeDataLength);
+        LE_INFO("%.2X ", writeData[i]);
+    }
 
-        for (size_t i = 0; i < writeDataLength; i++)
-        {
-            LE_DEBUG("%.2X ", writeData[i]);
-        }
+    transferResult = ioctl(fd, SPI_IOC_MESSAGE(2), tr);
 
-        transferResult = ioctl(fd, SPI_IOC_MESSAGE(2), tr);
+    if (transferResult < 1)
+    {
+        LE_ERROR("Transfer failed with error %d : %d (%m)", transferResult, errno);
+        LE_ERROR("can't send spi message");
+        result = LE_FAULT;
+    }
+    else
+    {
+        LE_DEBUG("Successful transmission with success %d", transferResult);
+        result = LE_OK;
+    }
 
-        if (transferResult < 1)
-        {
-            LE_ERROR("Transfer failed with error %d : %d (%m)", transferResult, errno);
-            LE_ERROR("can't send spi message");
-            result = LE_FAULT;
-        }
-        else
-        {
-            LE_DEBUG("Successful transmission with success %d", transferResult);
-            result = LE_OK;
-        }
-
-        LE_DEBUG("Received message...");
-        for (size_t i = 0; i < *readDataLength; i++)
-        {
-            LE_DEBUG("%.2X ", readData[i]);
-        }
+    LE_DEBUG("Received message...");
+    for (size_t i = 0; i < *readDataLength; i++)
+    {
+        LE_INFO("%.2X ", readData[i]);
     }
 
     return result;
@@ -152,14 +153,14 @@ le_result_t spiLib_WriteRead
 
 //--------------------------------------------------------------------------------------------------
 /**
- * Performs SPI Write.  You can send send Write command/ address of data to write/data to write.
- *
+ * Performs SPI Write Half Duplex.  You can send send Write command/ address of data to write/data to write.
+ * Note some devices do not support this mode. Check the data sheet of the device 
  * @return
  *      - LE_OK
  *      - LE_FAULT
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t spiLib_Write
+le_result_t spiLib_Write_Hd
 (
     int fd,                   ///< Open file descriptor of SPI port
     const uint8_t* writeData, ///< Command/address being sent to slave
@@ -198,6 +199,120 @@ le_result_t spiLib_Write
     {
         LE_DEBUG("%d", transferResult);
         result = LE_OK;
+    }
+
+    return result;
+}
+
+
+/**-----------------------------------------------------------------------------------------------
+ * Performs SPI WriteRead Full Duplex. You can send send Read command/ address of data to read.
+ * Note some devices do not support this mode. Check the data sheet of the device 
+ * @return
+ *      - LE_OK
+ *      - LE_FAULT
+ */
+//--------------------------------------------------------------------------------------------------
+le_result_t spiLib_WriteRead_Fd
+(
+    int fd,                   ///< open file descriptor of SPI port
+    const uint8_t* writeData, ///< tx command/address being sent to slave
+    uint8_t* readData,        ///< rx response from slave
+    size_t dataLength         ///< number of bytes in tx message
+)
+{
+    int transferResult;
+    le_result_t result;
+
+    struct spi_ioc_transfer tr[] =
+    {
+        {
+            .tx_buf = (unsigned long)writeData,
+            .rx_buf = (unsigned long)readData,
+            .len = dataLength,
+            // .delay_usecs = delay_out,
+            .cs_change = 0
+        },
+    };
+
+    LE_DEBUG("Transmitting this message...len:%zu", dataLength);
+
+    for (size_t i = 0; i < dataLength; i++)
+    {
+        LE_DEBUG("%.2X ", writeData[i]);
+    }
+
+    transferResult = ioctl(fd, SPI_IOC_MESSAGE(1), tr);
+
+    if (transferResult < 1)
+    {
+        LE_ERROR("Transfer failed with error %d : %d (%m)", transferResult, errno);
+
+       LE_ERROR("can't send spi message");
+        result = LE_FAULT;
+    }
+    else
+    {
+        LE_DEBUG("Successful transmission with success %d", transferResult);
+        result = LE_OK;
+    }
+
+    LE_DEBUG("Received message...");
+    for (size_t i = 0; i < dataLength; i++)
+    {
+        LE_DEBUG("%.2X ", readData[i]);
+    }
+
+    return result;
+}
+
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Performs SPI Read.  You can send send Write command/ address of data to write/data to write.
+ * Note some devices do not support this mode. Check the data sheet of the device 
+ * @return
+ *      - LE_OK
+ *      - LE_FAULT
+ */
+//--------------------------------------------------------------------------------------------------
+le_result_t spiLib_Read_Hd
+(
+    int fd,                   ///< Open file descriptor of SPI port
+    uint8_t* readData,        ///< Data being sent by slave
+    size_t* readDataLength    ///< Number of bytes in rx message
+)
+{
+    int transferResult;
+    le_result_t result;
+
+    struct spi_ioc_transfer tr[] =
+    {
+        {
+            .tx_buf = (unsigned long)NULL,
+            .rx_buf = (unsigned long)readData,
+            .len = *readDataLength,
+            // .delay_usecs = delay_out,
+            .cs_change = 0
+        }
+    };
+
+    transferResult = ioctl(fd, SPI_IOC_MESSAGE(1), tr);
+    if (transferResult < 1)
+    {
+        LE_ERROR("Transfer failed with error %d : %d (%m)", transferResult, errno);
+        LE_ERROR("can't receive spi message");
+        result = LE_FAULT;
+    }
+    else
+    {
+        LE_DEBUG("%d", transferResult);
+        result = LE_OK;
+    }
+    LE_DEBUG("Received message...");
+    for (size_t i = 0; i < *readDataLength; i++)
+    {
+        LE_DEBUG("%.2X ", readData[i]);
     }
 
     return result;
