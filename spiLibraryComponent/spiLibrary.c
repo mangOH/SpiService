@@ -124,7 +124,7 @@ le_result_t spiLib_WriteRead_Hd
 
     for (size_t i = 0; i < writeDataLength; i++)
     {
-        LE_INFO("%.2X ", writeData[i]);
+        LE_DEBUG("%.2X ", writeData[i]);
     }
 
     transferResult = ioctl(fd, SPI_IOC_MESSAGE(2), tr);
@@ -144,7 +144,7 @@ le_result_t spiLib_WriteRead_Hd
     LE_DEBUG("Received message...");
     for (size_t i = 0; i < *readDataLength; i++)
     {
-        LE_INFO("%.2X ", readData[i]);
+        LE_DEBUG("%.2X ", readData[i]);
     }
 
     return result;
