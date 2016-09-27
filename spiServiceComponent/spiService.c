@@ -2,24 +2,26 @@
 #include "interfaces.h"
 #include "spiLibrary.h"
 
-typedef struct spi_DeviceHandle
+typedef struct
 {
     int fd;
     ino_t inode;
     le_msg_SessionRef_t owningSession;
-    le_dls_Link_t link;
-} spi_DeviceHandle_t;
+} Device_t;
 
-static bool isHandleOwnedByCaller(const spi_DeviceHandle_t* handle);
-static spi_DeviceHandle_t* findDeviceHandleWithInode(ino_t inode);
+
+static bool isDeviceOwnedByCaller(const Device_t* handle);
+static Device_t const* findDeviceWithInode(ino_t inode);
 static void closeAllHandlesOwnedByClient(le_msg_SessionRef_t owner);
 static void clientSessionClosedHandler(le_msg_SessionRef_t clientSession, void* context);
 
 static struct
 {
-    le_dls_List_t deviceHandles;
+    // Memory pool for allocating devices
+    le_mem_PoolRef_t devicePool;
+    // A map of safe references to device objects
+    le_ref_MapRef_t deviceHandleRefMap;
 } g;
-
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -78,13 +80,13 @@ le_result_t spi_Open
         }
         goto resultKnown;
     }
-    spi_DeviceHandle_t* foundHandle = findDeviceHandleWithInode(deviceFileStat.st_ino);
-    if (foundHandle != NULL)
+    Device_t const* foundDevice = findDeviceWithInode(deviceFileStat.st_ino);
+    if (foundDevice != NULL)
     {
         LE_ERROR(
             "Device file \"%s\" has already been opened by a client with id (%p)",
             devicePath,
-            foundHandle->owningSession);
+            foundDevice->owningSession);
         result = LE_DUPLICATE;
         goto resultKnown;
     }
@@ -107,14 +109,11 @@ le_result_t spi_Open
         goto resultKnown;
     }
 
-    spi_DeviceHandle_t* newHandle = calloc(sizeof(spi_DeviceHandle_t), 1);
-    LE_ASSERT(newHandle);
-    newHandle->fd = openResult;
-    newHandle->inode = deviceFileStat.st_ino;
-    newHandle->owningSession = spi_GetClientSessionRef();
-    newHandle->link = LE_DLS_LINK_INIT;
-    le_dls_Stack(&g.deviceHandles, &newHandle->link);
-    *handle = newHandle;
+    Device_t* newDevice = le_mem_ForceAlloc(g.devicePool);
+    newDevice->fd = openResult;
+    newDevice->inode = deviceFileStat.st_ino;
+    newDevice->owningSession = spi_GetClientSessionRef();
+    *handle = le_ref_CreateRef(g.deviceHandleRefMap, newDevice);
 
 resultKnown:
     return result;
@@ -122,7 +121,7 @@ resultKnown:
 
 //--------------------------------------------------------------------------------------------------
 /**
- * Closes the given handle and frees the associated resources.
+ * Closes the device associated with the given handle and frees the associated resources.
  *
  * @note
  *      Once a handle is closed, it is not permitted to use it for future SPI access without first
@@ -134,28 +133,28 @@ void spi_Close
     spi_DeviceHandleRef_t handle  ///< Handle to close
 )
 {
-    if (!isHandleOwnedByCaller(handle))
+    Device_t* device = le_ref_Lookup(g.deviceHandleRefMap, handle);
+    if (device == NULL)
+    {
+        LE_KILL_CLIENT("Failed to lookup device from handle!");
+        return;
+    }
+
+    if (!isDeviceOwnedByCaller(device))
     {
         LE_KILL_CLIENT("Cannot close handle as it is not owned by the caller");
+        return;
     }
 
-    spi_DeviceHandle_t* foundHandle = findDeviceHandleWithInode(handle->inode);
-    if (foundHandle == NULL)
-    {
-        LE_KILL_CLIENT("Could not find record of the provided handle");
-    }
-    else if (foundHandle != handle)
-    {
-        LE_KILL_CLIENT("The handle with the matching inode isn't part of the supplied handle");
-    }
+    // Remove the handle from the map so it can't be used again
+    le_ref_DeleteRef(g.deviceHandleRefMap, handle);
 
-    le_dls_Remove(&g.deviceHandles, &handle->link);
-    int closeResult = close(handle->fd);
+    int closeResult = close(device->fd);
     if (closeResult != 0)
     {
         LE_WARN("Couldn't close the fd cleanly: (%m)");
     }
-    free(handle);
+    le_mem_Release(device);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -176,23 +175,19 @@ void spi_Configure
     int msb                       ///<
 )
 {
-    if (!isHandleOwnedByCaller(handle))
+    Device_t* device = le_ref_Lookup(g.deviceHandleRefMap, handle);
+    if (device == NULL)
+    {
+        LE_KILL_CLIENT("Failed to lookup device from handle!");
+        return;
+    }
+
+    if (!isDeviceOwnedByCaller(device))
     {
         LE_KILL_CLIENT("Cannot assign handle to configure as it is not owned by the caller");
     }
-    spi_DeviceHandle_t* foundHandle = findDeviceHandleWithInode(handle->inode);
-    if (foundHandle == NULL)
-    {
-        LE_KILL_CLIENT("Could not find record of the provided handle");
-    }
-    else if (foundHandle != handle)
-    {
-        LE_KILL_CLIENT(
-            "The handle with the matching inode isn't part of the supplied handle by the "
-            "configure call ");
-    }
 
-    spiLib_Configure(handle->fd, mode, bits, speed, msb);
+    spiLib_Configure(device->fd, mode, bits, speed, msb);
 }
 
 
@@ -213,24 +208,21 @@ le_result_t spi_WriteRead_Hd
     size_t* readDataLength        ///< Number of bytes in rx message
 )
 {
-    if (!isHandleOwnedByCaller(handle))
+    Device_t* device = le_ref_Lookup(g.deviceHandleRefMap, handle);
+    if (device == NULL)
+    {
+        LE_KILL_CLIENT("Failed to lookup device from handle!");
+        return LE_FAULT;
+    }
+
+    if (!isDeviceOwnedByCaller(device))
     {
         LE_KILL_CLIENT("Cannot assign handle to read as it is not owned by the caller");
-    }
-    spi_DeviceHandle_t* foundHandle = findDeviceHandleWithInode(handle->inode);
-    if (foundHandle == NULL)
-    {
-        LE_KILL_CLIENT("Could not find record of the provided handle");
-    }
-    else if (foundHandle != handle)
-    {
-        LE_KILL_CLIENT(
-            "The handle with the matching inode isn't part of the supplied handle by the read "
-            "call");
+        return LE_FAULT;
     }
 
     return spiLib_WriteRead_Hd(
-        handle->fd,
+        device->fd,
         writeData,
         writeDataLength,
         readData,
@@ -253,23 +245,19 @@ le_result_t spi_Write_Hd
     size_t writeDataLength        ///< Number of bytes in tx message
 )
 {
-    if (!isHandleOwnedByCaller(handle))
+    Device_t* device = le_ref_Lookup(g.deviceHandleRefMap, handle);
+    if (device == NULL)
+    {
+        LE_KILL_CLIENT("Failed to lookup device from handle!");
+        return LE_FAULT;
+    }
+
+    if (!isDeviceOwnedByCaller(device))
     {
         LE_KILL_CLIENT("Cannot assign handle to write  as it is not owned by the caller");
     }
-    spi_DeviceHandle_t* foundHandle = findDeviceHandleWithInode(handle->inode);
-    if (foundHandle == NULL)
-    {
-        LE_KILL_CLIENT("Could not find record of the provided handle");
-    }
-    else if (foundHandle != handle)
-    {
-        LE_KILL_CLIENT(
-            "The handle with the matching inode isn't part of the supplied handle by the write "
-            "call");
-    }
 
-    return spiLib_Write_Hd(handle->fd, writeData, writeDataLength) == LE_OK ? LE_OK : LE_FAULT;
+    return spiLib_Write_Hd(device->fd, writeData, writeDataLength) == LE_OK ? LE_OK : LE_FAULT;
 }
 
 
@@ -288,32 +276,29 @@ le_result_t spi_WriteRead_Fd
     const uint8_t* writeData,     ///< Tx command/address being sent to slave
     size_t writeDataLength,       ///< Number of bytes in tx message
     uint8_t* readData,            ///< Rx response from slave
-    size_t *readDataLength        ///< Number of bytes in rx message 
+    size_t *readDataLength        ///< Number of bytes in rx message
 )
 {
-    if (!isHandleOwnedByCaller(handle))
+    Device_t* device = le_ref_Lookup(g.deviceHandleRefMap, handle);
+    if (device == NULL)
     {
-        LE_KILL_CLIENT("Cannot assign handle to read as it is not owned by the caller");
-    }
-    spi_DeviceHandle_t* foundHandle = findDeviceHandleWithInode(handle->inode);
-    if (foundHandle == NULL)
-    {
-        LE_KILL_CLIENT("Could not find record of the provided handle");
-    }
-    else if (foundHandle != handle)
-    {
-        LE_KILL_CLIENT(
-            "The handle with the matching inode isn't part of the supplied handle by the read "
-            "call");
+        LE_KILL_CLIENT("Failed to lookup device from handle!");
+        return LE_FAULT;
     }
 
-    if( *readDataLength < writeDataLength)
-    { 
+    if (!isDeviceOwnedByCaller(device))
+    {
+        LE_KILL_CLIENT("Cannot assign handle to read as it is not owned by the caller");
+        return LE_FAULT;
+    }
+
+    if(*readDataLength < writeDataLength)
+    {
         LE_KILL_CLIENT("readData length cannot be less than writeData length");
     }
 
     return spiLib_WriteRead_Fd(
-        handle->fd,
+        device->fd,
         writeData,
         readData,
         writeDataLength) == LE_OK ? LE_OK : LE_FAULT;
@@ -334,23 +319,19 @@ le_result_t spi_Read_Hd
     size_t* readDataLength        ///< Number of bytes in tx message
 )
 {
-    if (!isHandleOwnedByCaller(handle))
+    Device_t* device = le_ref_Lookup(g.deviceHandleRefMap, handle);
+    if (device == NULL)
+    {
+        LE_KILL_CLIENT("Failed to lookup device from handle!");
+        return LE_FAULT;
+    }
+
+    if (!isDeviceOwnedByCaller(device))
     {
         LE_KILL_CLIENT("Cannot assign handle to write  as it is not owned by the caller");
     }
-    spi_DeviceHandle_t* foundHandle = findDeviceHandleWithInode(handle->inode);
-    if (foundHandle == NULL)
-    {
-        LE_KILL_CLIENT("Could not find record of the provided handle");
-    }
-    else if (foundHandle != handle)
-    {
-        LE_KILL_CLIENT(
-            "The handle with the matching inode isn't part of the supplied handle by the write "
-            "call");
-    }
 
-    return spiLib_Read_Hd(handle->fd, readData, readDataLength) == LE_OK ? LE_OK : LE_FAULT;
+    return spiLib_Read_Hd(device->fd, readData, readDataLength) == LE_OK ? LE_OK : LE_FAULT;
 }
 
 
@@ -362,43 +343,40 @@ le_result_t spi_Read_Hd
  *      true if the handle is owned by the current client or false otherwise.
  */
 //--------------------------------------------------------------------------------------------------
-static bool isHandleOwnedByCaller
+static bool isDeviceOwnedByCaller
 (
-    const spi_DeviceHandle_t* handle  ///< Handle to check the ownership of
+    const Device_t* device  ///< Device to check the ownership of
 )
 {
-    return handle->owningSession == spi_GetClientSessionRef();
+    return device->owningSession == spi_GetClientSessionRef();
 }
 
 //--------------------------------------------------------------------------------------------------
 /**
- * Searches within g.deviceHandles for a handle which contains the given inode value.  It is
- * assumed that there will be either 0 or 1 handle containing the given inode.
+ * Searches for a device which contains the given inode value. It is assumed that there will be
+ * either 0 or 1 device containing the given inode.
  *
  * @return
  *      Handle with the given inode or NULL if a matching handle was not found.
  */
 //--------------------------------------------------------------------------------------------------
-static spi_DeviceHandle_t* findDeviceHandleWithInode
+static Device_t const* findDeviceWithInode
 (
     ino_t inode
 )
 {
-    spi_DeviceHandle_t* result = NULL;
-
-    le_dls_Link_t* link = le_dls_Peek(&g.deviceHandles);
-    while (link != NULL)
+    le_ref_IterRef_t it = le_ref_GetIterator(g.deviceHandleRefMap);
+    while (le_ref_NextNode(it) == LE_OK)
     {
-        spi_DeviceHandle_t* handle = CONTAINER_OF(link, spi_DeviceHandle_t, link);
-        if (handle->inode == inode)
+        Device_t const* device = le_ref_GetValue(it);
+        LE_ASSERT(device != NULL);
+        if (device->inode == inode)
         {
-            result = handle;
-            break;
+            return device;
         }
-        link = le_dls_PeekNext(&g.deviceHandles, link);
     }
 
-    return result;
+    return NULL;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -413,23 +391,25 @@ static void closeAllHandlesOwnedByClient
     le_msg_SessionRef_t owner
 )
 {
-    bool handleFound = false;
-    do
+    le_ref_IterRef_t it = le_ref_GetIterator(g.deviceHandleRefMap);
+
+
+    bool finished = le_ref_NextNode(it) != LE_OK;
+    while (!finished)
     {
-        le_dls_Link_t* link = le_dls_Peek(&g.deviceHandles);
-        while (link != NULL)
+        Device_t const* device = le_ref_GetValue(it);
+        LE_ASSERT(device != NULL);
+        // In order to prevent invalidating the iterator, we store the reference of the device we
+        // want to close and advance the iterator before calling spi_Close which will remove the
+        // reference from the hashmap.
+        spi_DeviceHandleRef_t toClose =
+            (device->owningSession == owner) ? ((void*)le_ref_GetSafeRef(it)) : NULL;
+        finished = le_ref_NextNode(it) != LE_OK;
+        if (toClose != NULL)
         {
-            spi_DeviceHandle_t* handle = CONTAINER_OF(link, spi_DeviceHandle_t, link);
-            if (handle->owningSession == owner)
-            {
-                spi_Close(handle);
-                handleFound = true;
-                break;
-            }
-            link = le_dls_PeekNext(&g.deviceHandles, link);
+            spi_Close(toClose);
         }
-        handleFound = false;
-    } while (handleFound);
+    }
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -450,7 +430,9 @@ COMPONENT_INIT
 {
     LE_INFO("spiServiceComponent initializing");
 
-    g.deviceHandles = LE_DLS_LIST_INIT;
+    g.devicePool = le_mem_CreatePool("SPI Pool", sizeof(Device_t));
+    const size_t maxExpectedDevice = 8;
+    g.deviceHandleRefMap = le_ref_CreateMap("SPI handles", maxExpectedDevice);
 
     // Register a handler to be notified when clients disconnect
     le_msg_AddServiceCloseHandler(spi_GetServiceRef(), clientSessionClosedHandler, NULL);
