@@ -199,7 +199,7 @@ void spi_Configure
  *      LE_OK on success or LE_FAULT on failure.
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t spi_WriteRead_Hd
+le_result_t spi_WriteReadHD
 (
     spi_DeviceHandleRef_t handle, ///< Handle for the SPI master to perform the write-read on
     const uint8_t* writeData,     ///< Tx command/address being sent to slave
@@ -221,7 +221,7 @@ le_result_t spi_WriteRead_Hd
         return LE_FAULT;
     }
 
-    return spiLib_WriteRead_Hd(
+    return spiLib_WriteReadHD(
         device->fd,
         writeData,
         writeDataLength,
@@ -238,7 +238,7 @@ le_result_t spi_WriteRead_Hd
  *      LE_OK on success or LE_FAULT on failure.
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t spi_Write_Hd
+le_result_t spi_WriteHD
 (
     spi_DeviceHandleRef_t handle, ///< Handle for the SPI master to perform the write on
     const uint8_t* writeData,     ///< Command/address being sent to slave
@@ -257,7 +257,7 @@ le_result_t spi_Write_Hd
         LE_KILL_CLIENT("Cannot assign handle to write  as it is not owned by the caller");
     }
 
-    return spiLib_Write_Hd(device->fd, writeData, writeDataLength) == LE_OK ? LE_OK : LE_FAULT;
+    return spiLib_WriteHD(device->fd, writeData, writeDataLength) == LE_OK ? LE_OK : LE_FAULT;
 }
 
 
@@ -270,7 +270,7 @@ le_result_t spi_Write_Hd
  *      LE_OK on success or LE_FAULT on failure.
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t spi_WriteRead_Fd
+le_result_t spi_WriteReadFD
 (
     spi_DeviceHandleRef_t handle, ///< Handle for the SPI master to perform the write-read on
     const uint8_t* writeData,     ///< Tx command/address being sent to slave
@@ -297,7 +297,7 @@ le_result_t spi_WriteRead_Fd
         LE_KILL_CLIENT("readData length cannot be less than writeData length");
     }
 
-    return spiLib_WriteRead_Fd(
+    return spiLib_WriteReadFD(
         device->fd,
         writeData,
         readData,
@@ -312,7 +312,7 @@ le_result_t spi_WriteRead_Fd
  *      LE_OK on success or LE_FAULT on failure.
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t spi_Read_Hd
+le_result_t spi_ReadHD
 (
     spi_DeviceHandleRef_t handle, ///< Handle for the SPI master to perform the write on
     uint8_t* readData,      ///< Command/address being sent to slave
@@ -331,7 +331,7 @@ le_result_t spi_Read_Hd
         LE_KILL_CLIENT("Cannot assign handle to write  as it is not owned by the caller");
     }
 
-    return spiLib_Read_Hd(device->fd, readData, readDataLength) == LE_OK ? LE_OK : LE_FAULT;
+    return spiLib_ReadHD(device->fd, readData, readDataLength) == LE_OK ? LE_OK : LE_FAULT;
 }
 
 
@@ -428,7 +428,7 @@ static void clientSessionClosedHandler
 
 COMPONENT_INIT
 {
-    LE_INFO("spiServiceComponent initializing");
+    LE_DEBUG("spiServiceComponent initializing");
 
     g.devicePool = le_mem_CreatePool("SPI Pool", sizeof(Device_t));
     const size_t maxExpectedDevice = 8;

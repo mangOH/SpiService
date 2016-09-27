@@ -21,7 +21,7 @@ void spiLib_Configure
                     ///  consider redefining the mode options in spiLibrary.h because we should be
                     ///  abstracting away the underlying spidev.h
     uint8_t bits,   ///< bits per word
-    uint32_t speed, ///< max speed (Hz) 
+    uint32_t speed, ///< max speed (Hz)
     int msb         ///< set as 0 for MSB as first byte or 1 for LSB as first byte
 )
 {
@@ -84,13 +84,16 @@ void spiLib_Configure
 
 /**-----------------------------------------------------------------------------------------------
  * Performs SPI WriteRead Half Duplex. You can send send Read command/ address of data to read.
- * Note some devices do not support this mode. Check the data sheet of the device 
+ *
  * @return
  *      - LE_OK
  *      - LE_FAULT
+ *
+ * @note
+ *      Some devices do not support this mode. Check the data sheet of the device.
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t spiLib_WriteRead_Hd
+le_result_t spiLib_WriteReadHD
 (
     int fd,                   ///< open file descriptor of SPI port
     const uint8_t* writeData, ///< tx command/address being sent to slave
@@ -153,14 +156,18 @@ le_result_t spiLib_WriteRead_Hd
 
 //--------------------------------------------------------------------------------------------------
 /**
- * Performs SPI Write Half Duplex.  You can send send Write command/ address of data to write/data to write.
- * Note some devices do not support this mode. Check the data sheet of the device 
+ * Performs SPI Write Half Duplex.  You can send send Write command/ address of data to write/data
+ * to write.
+ *
  * @return
  *      - LE_OK
  *      - LE_FAULT
+ *
+ * @note
+ *      Some devices do not support this mode. Check the data sheet of the device.
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t spiLib_Write_Hd
+le_result_t spiLib_WriteHD
 (
     int fd,                   ///< Open file descriptor of SPI port
     const uint8_t* writeData, ///< Command/address being sent to slave
@@ -207,13 +214,16 @@ le_result_t spiLib_Write_Hd
 
 /**-----------------------------------------------------------------------------------------------
  * Performs SPI WriteRead Full Duplex. You can send send Read command/ address of data to read.
- * Note some devices do not support this mode. Check the data sheet of the device 
+ *
  * @return
  *      - LE_OK
  *      - LE_FAULT
+ *
+ * @note
+ *      Some devices do not support this mode. Check the data sheet of the device.
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t spiLib_WriteRead_Fd
+le_result_t spiLib_WriteReadFD
 (
     int fd,                   ///< open file descriptor of SPI port
     const uint8_t* writeData, ///< tx command/address being sent to slave
@@ -270,13 +280,16 @@ le_result_t spiLib_WriteRead_Fd
 //--------------------------------------------------------------------------------------------------
 /**
  * Performs SPI Read.  You can send send Write command/ address of data to write/data to write.
- * Note some devices do not support this mode. Check the data sheet of the device 
+ *
  * @return
  *      - LE_OK
  *      - LE_FAULT
+ *
+ * @note
+ *      Some devices do not support this mode. Check the data sheet of the device.
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t spiLib_Read_Hd
+le_result_t spiLib_ReadHD
 (
     int fd,                   ///< Open file descriptor of SPI port
     uint8_t* readData,        ///< Data being sent by slave
@@ -321,5 +334,5 @@ le_result_t spiLib_Read_Hd
 
 COMPONENT_INIT
 {
-    LE_INFO("spiLibraryComponent initializing");
+    LE_DEBUG("spiLibraryComponent initializing");
 }

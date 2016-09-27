@@ -43,26 +43,26 @@ FUNCTION Configure
     int msb IN
 );
 
-FUNCTION le_result_t WriteRead_Hd
+FUNCTION le_result_t WriteReadHD
 (
     DeviceHandle handle IN,
     uint8 writeData [MAX_WRITE_SIZE] IN,
     uint8 readData  [MAX_READ_SIZE] OUT
 );
 
-FUNCTION le_result_t Write_Hd
+FUNCTION le_result_t WriteHD
 (
     DeviceHandle handle IN,
     uint8 writeData [MAX_WRITE_SIZE] IN
 );
 
-FUNCTION le_result_t Read_Hd
+FUNCTION le_result_t ReadHD
 (
     DeviceHandle handle IN,
     uint8 readData [MAX_READ_SIZE] OUT
 );
 
-FUNCTION le_result_t WriteRead_Fd
+FUNCTION le_result_t WriteReadFD
 (
     DeviceHandle handle IN,
     uint8 writeData [MAX_WRITE_SIZE] IN,
