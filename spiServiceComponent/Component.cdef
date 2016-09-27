@@ -2,7 +2,7 @@ provides:
 {
     api:
     {
-        $MANGOH_ROOT/apps/SpiBus/spi.api
+        $MANGOH_ROOT/apps/SpiService/spi.api
     }
 }
 
@@ -14,7 +14,7 @@ sources:
 cflags:
 {
     -std=c99
-    -I$MANGOH_ROOT/apps/SpiBus/spiLibraryComponent
+    -I$MANGOH_ROOT/apps/SpiService/spiLibraryComponent
 }
 
 requires:
